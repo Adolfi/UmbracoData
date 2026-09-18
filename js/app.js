@@ -3,8 +3,7 @@ var UD = window.UD || (window.UD = {});
 (function () {
   'use strict';
 
-  var CACHE_KEY = 'umbraco-history-cache-v1';
-  var CACHE_TTL = 6 * 60 * 60 * 1000;  /* re-read in the background after 6h */
+  var DATA_FILE = 'js/data.js';
 
   /* Each metric owns a fixed palette slot. Colour follows the metric, never its
      rank, so switching views never repaints anything. */
@@ -53,27 +52,12 @@ var UD = window.UD || (window.UD = {});
   var state = {
     data: null,
     metric: METRICS[0],
-    selected: null,
-    live: false
+    selected: null
   };
 
   var $ = function (id) { return document.getElementById(id); };
 
   function fmtInt(v) { return Number(v).toLocaleString('en-US'); }
-
-  /* ---------- storage (any of this can throw in a private window) ---------- */
-
-  function readCache() {
-    try {
-      var raw = localStorage.getItem(CACHE_KEY);
-      if (!raw) return null;
-      var obj = JSON.parse(raw);
-      return obj && obj.years && obj.years.length ? obj : null;
-    } catch (e) { return null; }
-  }
-  function writeCache(data) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (e) { /* fine */ }
-  }
 
   /* ---------- boot ---------- */
 
@@ -102,46 +86,22 @@ var UD = window.UD || (window.UD = {});
     wireControls();
     $('brand-year').textContent = new Date().getFullYear();
 
-    var cached = readCache();
-    var fresh = cached && (Date.now() - new Date(cached.fetchedAt).getTime() < CACHE_TTL);
-
-    if (cached) {
-      apply(cached, cached.via === 'snapshot' ? 'snapshot' : 'cache');
-    } else {
-      apply(UD.snapshot, 'snapshot');
-    }
-    if (!fresh) refresh(true);
+    /* js/data.js has already run by now and left the dataset on UD. Loading it
+       as a script rather than fetching JSON is what lets this page work when it
+       is opened straight from disk. */
+    if (UD.data && UD.data.years && UD.data.years.length) apply(UD.data);
+    else showLoadError();
   }
 
-  function refresh(quiet) {
-    setStatus('loading', quiet ? 'Checking umbraco.com…' : 'Reading umbraco.com…');
-    $('refresh').disabled = true;
-
-    UD.parser.load()
-      .then(function (data) {
-        writeCache(data);
-        apply(data, 'live');
-      })
-      .catch(function (err) {
-        if (state.data) {
-          setStatus('warn', 'Live read failed – showing ' + (state.live ? 'last good data' : 'the bundled snapshot'));
-        } else {
-          apply(UD.snapshot, 'snapshot');
-          setStatus('warn', 'Live read failed – showing the bundled snapshot');
-        }
-        if (window.console) console.warn('[umbraco-data] live read failed', err && err.attempts);
-      })
-      .then(function () { $('refresh').disabled = false; });
-  }
-
-  function apply(data, origin) {
+  function apply(data) {
     state.data = data;
-    state.live = origin === 'live' || origin === 'cache';
 
-    var when = data.fetchedAt ? new Date(data.fetchedAt) : null;
-    if (origin === 'live') setStatus('ok', 'Live from umbraco.com · ' + timeOf(when));
-    else if (origin === 'cache') setStatus('ok', 'Cached from umbraco.com · ' + timeOf(when));
-    else setStatus('warn', 'Bundled snapshot · ' + (when ? timeOf(when) : 'offline'));
+    if (data.generatedAt) {
+      var when = new Date(data.generatedAt);
+      $('data-date').textContent = ', read ' + when.toLocaleDateString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+    }
 
     if (!state.selected) {
       var last = lastYearWith(state.metric);
@@ -150,19 +110,11 @@ var UD = window.UD || (window.UD = {});
     draw();
   }
 
-  function timeOf(d) {
-    if (!d) return 'unknown time';
-    var mins = Math.round((Date.now() - d.getTime()) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return mins + ' min ago';
-    var hrs = Math.round(mins / 60);
-    if (hrs < 24) return hrs + ' h ago';
-    return d.toLocaleDateString();
-  }
-
-  function setStatus(kind, text) {
-    $('status').className = 'status is-' + kind;
-    $('status-text').textContent = text;
+  function showLoadError() {
+    var box = $('load-error');
+    box.hidden = false;
+    box.textContent = 'No data found in ' + DATA_FILE +
+      '. Run node tools/update-data.js to generate it.';
   }
 
   /* ---------- controls ---------- */
@@ -199,7 +151,6 @@ var UD = window.UD || (window.UD = {});
   }
 
   function wireControls() {
-    $('refresh').addEventListener('click', function () { refresh(false); });
     window.addEventListener('hashchange', function () {
       readHash();
       document.querySelectorAll('.metric').forEach(function (b) {
@@ -333,7 +284,7 @@ var UD = window.UD || (window.UD = {});
     }
     if (m.id === 'revenue') {
       notes.push('Figures published in Danish kroner are converted at the krone’s fixed rate of ' +
-                 UD.parser.DKK_PER_EUR + ' DKK per euro; hover a column for the figure as published.');
+                 (state.data.dkkPerEur || 7.46) + ' DKK per euro; hover a column for the figure as published.');
     }
     if (m.id === 'employees') notes.push('A “+” means the page states the figure as “120+” and similar.');
     if (m.id === 'milestones') notes.push('Counted as the number of non-statistic bullet points the page lists for the year.');

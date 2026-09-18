@@ -17,19 +17,12 @@
       <h1>The Numbers 🦄</h1>
       <p class="brand-sub">Umbraco Community and Company data, 1997&ndash;<span id="brand-year">today</span></p>
     </div>
-    <div class="topbar-actions">
-      <div class="status" id="status" role="status" aria-live="polite">
-        <span class="dot" id="status-dot"></span>
-        <span id="status-text">Loading&hellip;</span>
-      </div>
-      <button type="button" class="btn" id="refresh" title="Re-read the Umbraco history page now">
-        <span class="btn-ico" aria-hidden="true">&#8635;</span> Refresh
-      </button>
-    </div>
   </div>
 </header>
 
 <main id="main">
+
+  <p class="load-error" id="load-error" hidden></p>
 
   <nav class="metrics" aria-label="Choose a metric">
     <!-- metric buttons injected -->
@@ -66,15 +59,13 @@
 
   <footer class="credits">
     <p>
-      Every figure on this page is read at load time from
-      <a href="https://umbraco.com/about-us/the-history-of-umbraco/" rel="noopener" target="_blank">umbraco.com/about-us/the-history-of-umbraco</a>.<br/>
-      When Umbraco updates that page, this dashboard updates with it.
+      Figures from
+      <a href="https://umbraco.com/about-us/the-history-of-umbraco/" rel="noopener" target="_blank">The History of Umbraco</a><span id="data-date"></span>.
     </p>
   </footer>
 </main>
 
-<script src="js/snapshot.js"></script>
-<script src="js/parser.js"></script>
+<script src="js/data.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/app.js"></script>
 </body>
